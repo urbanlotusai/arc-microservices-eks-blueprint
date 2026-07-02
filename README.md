@@ -39,13 +39,13 @@ No hand-wiring of VPCs, IAM roles for service accounts, ALB ingress controllers,
 
 | Advantage | What it means for you |
 |---|---|
-| ⚡ **Minutes, not days** | A complete, secured EKS microservices stack normally takes days of Terraform wiring — this deploys in one command. |
-| 🔒 **Secure by default** | KMS CMK encrypts EKS secrets, Aurora, Redis, and SQS. ECR images scanned on push. WAF rate-limits ingress. |
-| 🏛️ **Compliance-ready** | Built-in `general` / `hipaa` profiles activate Aurora PITR, deletion protection, and tighter WAF rate limits. |
-| 🧩 **Proven building blocks** | Every resource comes from a published, versioned SourceFuse ARC module. Upgrades are a version bump. |
-| 🔄 **GitOps-ready** | ArgoCD is deployed post-apply via Helm. Point it at your app repo and all future deployments are pull-based. |
-| 📦 **Portable & auditable** | Pure Terraform. Version-controlled, reproducible across environments and accounts. |
-| 🛠️ **Beginner-friendly** | One `Makefile`, copy-paste examples per profile, and step-by-step docs for macOS, Linux, and Windows. |
+| **Minutes, not days** | A complete, secured EKS microservices stack normally takes days of Terraform wiring — this deploys in one command. |
+| **Secure by default** | KMS CMK encrypts EKS secrets, Aurora, Redis, and SQS. ECR images scanned on push. WAF rate-limits ingress. |
+| **Compliance-ready** | Built-in `general` / `hipaa` profiles activate Aurora PITR, deletion protection, and tighter WAF rate limits. |
+| **Proven building blocks** | Every resource comes from a published, versioned SourceFuse ARC module. Upgrades are a version bump. |
+| **GitOps-ready** | ArgoCD is deployed post-apply via Helm. Point it at your app repo and all future deployments are pull-based. |
+| **Portable & auditable** | Pure Terraform. Version-controlled, reproducible across environments and accounts. |
+| **Beginner-friendly** | One `Makefile`, copy-paste examples per profile, and step-by-step docs for macOS, Linux, and Windows. |
 
 ---
 
