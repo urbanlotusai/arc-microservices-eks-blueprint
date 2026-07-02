@@ -41,7 +41,7 @@ No hand-wiring of VPCs, IAM roles for service accounts, ALB ingress controllers,
 |---|---|
 | **Minutes, not days** | A complete, secured EKS microservices stack normally takes days of Terraform wiring — this deploys in one command. |
 | **Secure by default** | KMS CMK encrypts EKS secrets, Aurora, Redis, and SQS. ECR images scanned on push. WAF rate-limits ingress. |
-| **Compliance-ready** | Built-in `general` / `hipaa` / `pci_dss` profiles activate Aurora PITR, deletion protection, and tighter WAF rate limits. |
+| **Compliance-ready** | Built-in `general` / `hipaa` / `pci` profiles activate Aurora PITR, deletion protection, and tighter WAF rate limits. |
 | **Proven building blocks** | Every resource comes from a published, versioned SourceFuse ARC module. Upgrades are a version bump. |
 | **GitOps-ready** | ArgoCD is deployed post-apply via Helm. Point it at your app repo and all future deployments are pull-based. |
 | **Portable & auditable** | Pure Terraform. Version-controlled, reproducible across environments and accounts. |
@@ -99,36 +99,50 @@ No hand-wiring of VPCs, IAM roles for service accounts, ALB ingress controllers,
 - **kubectl** installed ([install guide](https://kubernetes.io/docs/tasks/tools/))
 - **Helm** `>= 3.x` (for post-apply ArgoCD install)
 
-### 2. Configure
+### 2. Clone
 
 ```bash
-git clone https://github.com/sourcefuse/arc-microservices-eks-blueprint.git
+git clone https://github.com/urbanlotusai/arc-microservices-eks-blueprint.git
 cd arc-microservices-eks-blueprint
-
-cp examples/general.tfvars terraform.tfvars
 ```
 
-Edit the mandatory values in `terraform.tfvars`:
+This blueprint uses **independent per-module Terraform state** — there is no root `main.tf`. Each `modules/NN-name/` is applied on its own, with cross-module values (like the KMS key ARN, VPC ID, and cluster ID) resolved via `terraform_remote_state` data sources rather than a parent module.
 
-| Variable | Example |
-|---|---|
-| `environment` | `prod` |
-| `namespace` | `myorg` |
-| `db_password` | `YourSecureDBPassword` |
+### 3. Bootstrap the state backend (once per environment)
 
-### 3. Deploy
+```bash
+make bootstrap ENV=dev REGION=us-east-1 NAMESPACE=myorg
+```
 
-| Step | With `make` | Raw Terraform (all OS) |
+Creates the S3 state bucket + DynamoDB lock table every module's backend uses.
+
+### 4. Deploy all modules
+
+```bash
+make apply ENV=dev REGION=us-east-1 NAMESPACE=myorg
+```
+
+This runs `terraform init` + `apply` across `modules/01-kms` through `modules/11-load-balancer` in order.
+
+### Deploy a single module with a compliance profile
+
+```bash
+./scripts/apply-module.sh 07-db dev us-east-1 hipaa
+```
+
+Copies `modules/07-db/tfvars/hipaa.tfvars` → `terraform.tfvars` for that module, then inits/plans/applies it alone.
+
+| Step | With `make` (all modules) | Single module |
 |---|---|---|
-| Validate | `make validate` | `terraform init -backend=false && terraform validate` |
-| Preview | `make plan` | `terraform plan` |
-| Deploy | `make apply` | `terraform init && terraform apply` |
+| Validate | `make validate` | `cd modules/<NN-name> && terraform validate` |
+| Preview | `make plan` | `./scripts/apply-module.sh <name> <env> <region> <profile>` then inspect the plan |
+| Deploy | `make apply` | `./scripts/apply-module.sh <name> <env> <region> <profile>` |
 
-### 4. Configure kubectl and install ArgoCD
+### 5. Configure kubectl and install ArgoCD
 
 ```bash
 # Update kubeconfig
-$(terraform output -raw kubeconfig_command)
+$(cd modules/04-eks && terraform output -raw cluster_id | xargs -I{} aws eks update-kubeconfig --region us-east-1 --name {})
 
 # Install ArgoCD via Helm (post-apply step — no arc-argocd module needed)
 helm repo add argo https://argoproj.github.io/argo-helm
@@ -142,14 +156,16 @@ kubectl -n argocd get secret argocd-initial-admin-secret \
   -o jsonpath="{.data.password}" | base64 -d
 ```
 
-### 5. Push your container image and deploy
+### 6. Push your container image and deploy
 
 ```bash
-ECR_URL=$(terraform output -raw ecr_repository_url)
+ECR_URL=$(cd modules/06-ecr && terraform output -raw repository_url)
 aws ecr get-login-password | docker login --username AWS --password-stdin $ECR_URL
 docker tag myapp:latest $ECR_URL:latest
 docker push $ECR_URL:latest
 ```
+
+See [sample-app/README.md](sample-app/README.md) for the full build/push/deploy walkthrough, including the Kubernetes manifests.
 
 ---
 
@@ -157,26 +173,29 @@ docker push $ECR_URL:latest
 
 | Profile | Effect |
 |---|---|
-| `general` | KMS rotation on, 7-day Aurora PITR, WAF rate limit 5000 |
-| `hipaa` | Aurora PITR 35 days + deletion protection, WAF rate limit 2000 |
-| `pci_dss` | Aurora PITR 35 days + deletion protection, WAF rate limit 1000, SQS DLQ retries 1 |
+| `general` | KMS rotation on, 7-day Aurora PITR, WAF rate limit 5000, SQS DLQ retries 3 |
+| `hipaa` | Aurora PITR 35 days + deletion protection, WAF rate limit 2000, SQS DLQ retries 1 |
+| `pci` | Aurora PITR 35 days + deletion protection, WAF rate limit 1000, SQS DLQ retries 1 |
+
+Apply a profile to any module with `./scripts/apply-module.sh <module> <env> <region> <profile>`.
 
 ---
 
 ## Key outputs
 
+Each module exposes its own outputs via `terraform output` from within that module's directory:
+
 ```bash
-terraform output cluster_id             # EKS cluster name
-terraform output cluster_endpoint       # EKS API server endpoint
-terraform output kubeconfig_command     # aws eks update-kubeconfig ...
-terraform output ecr_repository_url     # push container images here
-terraform output db_cluster_endpoint    # Aurora writer endpoint
-terraform output redis_endpoint         # ElastiCache primary endpoint
-terraform output sqs_queue_url          # inter-service queue
-terraform output sqs_dlq_url            # dead-letter queue
-terraform output alb_dns_name           # ALB DNS name
-terraform output waf_arn                # WAF Web ACL ARN
-terraform output kms_key_arn            # CMK
+cd modules/04-eks    && terraform output cluster_id              # EKS cluster name
+cd modules/04-eks    && terraform output cluster_endpoint        # EKS API server endpoint
+cd modules/06-ecr    && terraform output repository_url          # push container images here
+cd modules/07-db     && terraform output cluster_endpoint        # Aurora writer endpoint
+cd modules/08-cache  && terraform output cluster_address         # ElastiCache Redis primary endpoint
+cd modules/09-sqs    && terraform output queue_url                # inter-service queue
+cd modules/09-sqs    && terraform output dead_letter_queue_url    # dead-letter queue
+cd modules/11-load-balancer && terraform output dns_name          # ALB DNS name
+cd modules/10-waf    && terraform output arn                     # WAF Web ACL ARN
+cd modules/01-kms    && terraform output key_arn                 # CMK
 ```
 
 ---
@@ -185,16 +204,15 @@ terraform output kms_key_arn            # CMK
 
 ```
 arc-microservices-eks-blueprint/
-├── main.tf                   # 11 ARC module blocks, in dependency order
-├── variables.tf              # all inputs with types & descriptions
-├── locals.tf                 # naming, tags, compliance overlays
-├── data.tf                   # caller identity, KMS policy, subnet lookups, EKS auth
-├── outputs.tf                # cluster ID, ECR URL, Aurora/Redis endpoints, queue URLs
-├── version.tf                # Terraform + AWS + kubernetes + helm provider pins
-├── .terraform-version        # tfenv pin (1.9.8)
-├── terraform.tfvars.example  # copy to terraform.tfvars
-├── modules/                  # one numbered wrapper per ARC module
+├── bootstrap/                  # creates the S3 + DynamoDB state backend (apply first)
+│   ├── main.tf · variables.tf · outputs.tf
+├── modules/                    # each folder is an independent Terraform root
 │   ├── 01-kms/
+│   │   ├── config.hcl          # static backend key
+│   │   ├── main.tf             # own backend "s3" {}, own provider, own module block
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   └── tfvars/{general,hipaa,pci}.tfvars
 │   ├── 02-network/
 │   ├── 03-security-group/
 │   ├── 04-eks/
@@ -205,18 +223,17 @@ arc-microservices-eks-blueprint/
 │   ├── 09-sqs/
 │   ├── 10-waf/
 │   └── 11-load-balancer/
-├── sample-app/                # multi-service Node app proving the EKS stack end-to-end
-├── examples/
-│   ├── README.md
-│   ├── general.tfvars
-│   ├── hipaa.tfvars
-│   └── pci_dss.tfvars
+├── scripts/
+│   └── apply-module.sh         # apply one module with a chosen compliance profile
+├── Makefile                    # bootstrap / init / plan / apply / validate / fmt / build-sample
+├── .terraform-version          # tfenv pin (1.9.8)
+├── sample-app/                 # multi-service Node app + Dockerfile + k8s manifests
 ├── docs/
-│   ├── INSTALL.md            # macOS · Linux · Windows setup guide
-│   └── DEPLOYMENT.md        # full deployment + ArgoCD setup + rollback
-├── GETTING-STARTED.md        # beginner walkthrough + ArgoCD install
+│   ├── INSTALL.md              # macOS · Linux · Windows setup guide
+│   └── DEPLOYMENT.md           # full deployment + ArgoCD setup + rollback
+├── GETTING-STARTED.md          # beginner walkthrough + ArgoCD install
 ├── CONTRIBUTING.md
-├── CHANGELOG.md · LICENSE · NOTICE · Makefile · VERSION
+├── CHANGELOG.md · LICENSE · NOTICE · VERSION
 └── README.md
 ```
 
@@ -227,16 +244,16 @@ arc-microservices-eks-blueprint/
 - **[GETTING-STARTED.md](GETTING-STARTED.md)** — zero-to-live walkthrough including ArgoCD setup
 - **[docs/INSTALL.md](docs/INSTALL.md)** — install Terraform, AWS CLI, kubectl, and Helm on macOS / Linux / Windows
 - **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — full deployment reference, image push, ArgoCD app setup, rollback
-- **[examples/README.md](examples/README.md)** — compliance-profile example files
+- **`modules/*/tfvars/{general,hipaa,pci}.tfvars`** — per-module compliance-profile example files
 
 ---
 
 ## Important notes
 
-- **ArgoCD is not a Terraform-managed resource** — there is no `arc-argocd` module. ArgoCD is installed via Helm post-apply (Step 4 above). This is the standard GitOps pattern: infrastructure is Terraform, GitOps tooling is Helm.
+- **Independent per-module state** — there is no root `main.tf` composing all 11 modules. Each `modules/NN-name/` is its own Terraform root with its own S3 backend and provider block. Cross-module values (VPC ID, security group ID, cluster ID, KMS key ARN) are read via `data "terraform_remote_state"` blocks instead of `module.x.output` references.
+- **ArgoCD is not a Terraform-managed resource** — there is no `arc-argocd` module, and no Terraform `helm`/`kubernetes` provider is configured anywhere in this blueprint. ArgoCD is installed via the Helm CLI post-apply (Step 5 above), out of band from Terraform. This is the standard GitOps pattern: infrastructure is Terraform, GitOps tooling is Helm.
 - **WAF scope is REGIONAL** — this blueprint uses ALB (not CloudFront), so `web_acl_scope = "REGIONAL"`. Do not change it to `CLOUDFRONT`.
-- **Two providers need EKS to exist** — the `kubernetes` and `helm` providers reference `module.eks` outputs. They cannot configure until after the first apply. This is expected.
-- **ALB depends on EKS addons** — `module.alb` has `depends_on = [module.eks_addons]` because the AWS Load Balancer Controller (installed by the VPC CNI addon) must be ready before the ALB is created.
+- **11-load-balancer must be applied after 05-eks-addon** — the AWS Load Balancer Controller (installed by the VPC CNI addon) must be ready before the ALB is created. In the single-shared-state design this was expressed as `depends_on = [module.eks_addons]`; with independent per-module state there is no parent module to hold that edge, so ordering is achieved purely by applying `modules/` in numeric directory order (`make apply` / `make init` iterate `modules/*/` in sorted order, so `05-eks-addon` always runs before `11-load-balancer`). No `depends_on` exists across module `main.tf` files.
 - **Two-apply KMS pattern** — narrow the KMS key policy after first apply to grant only the EKS node role and ECS task role. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ---

@@ -1,55 +1,67 @@
-variable "name" {
-  type = string
-}
-
 variable "namespace" {
-  type = string
+  description = "Organization or team namespace"
+  type        = string
+  default     = "arc"
 }
 
 variable "environment" {
-  type = string
+  description = "Environment name"
+  type        = string
+  default     = "dev"
 }
 
-variable "engine" {
-  type = string
-}
-
-variable "engine_version" {
-  type = string
-}
-
-variable "port" {
-  type = number
-}
-
-variable "username" {
-  type = string
-}
-
-variable "vpc_id" {
-  type = string
-}
-
-variable "db_subnet_group_data" {
-  type = any
-}
-
-variable "kms_key_id" {
-  type = string
-}
-
-variable "instance_class" {
-  type = string
-}
-
-variable "backup_retention_period" {
-  type = number
-}
-
-variable "deletion_protection" {
-  type = bool
+variable "region" {
+  description = "AWS region"
+  type        = string
+  default     = "us-east-1"
 }
 
 variable "tags" {
-  type = map(string)
+  description = "Tags to apply to resources"
+  type        = map(string)
+  default = {
+    ManagedBy = "Terraform"
+    Project   = "arc-microservices-eks-blueprint"
+  }
+}
+
+variable "state_bucket_name" {
+  description = "S3 bucket name for Terraform state (used to read 01-kms and 02-network remote state)"
+  type        = string
+}
+
+variable "engine" {
+  description = "Aurora engine: aurora-postgresql or aurora-mysql."
+  type        = string
+  default     = "aurora-postgresql"
+}
+
+variable "engine_version" {
+  description = "Aurora engine version."
+  type        = string
+  default     = "15.4"
+}
+
+variable "username" {
+  description = "Master username for the Aurora cluster."
+  type        = string
+  default     = "dbadmin"
+}
+
+variable "instance_class" {
+  description = "Aurora instance class."
+  type        = string
+  default     = "db.r6g.large"
+}
+
+variable "backup_retention_period" {
+  description = "Number of days to retain automated backups (PITR window)."
+  type        = number
+  default     = 7
+}
+
+variable "deletion_protection" {
+  description = "Prevent the Aurora cluster from being deleted without first disabling this flag."
+  type        = bool
+  default     = false
 }

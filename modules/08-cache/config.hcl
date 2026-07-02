@@ -1,0 +1,9 @@
+# =============================================================================
+# 08-cache Backend Configuration (static keys only)
+# =============================================================================
+# bucket, dynamodb_table, and region are supplied at `terraform init` time
+# via -backend-config flags in the Makefile / apply-module.sh script.
+# =============================================================================
+
+key     = "modules/08-cache/terraform.tfstate"
+encrypt = true

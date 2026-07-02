@@ -1,5 +1,0 @@
-environment        = "prod"
-namespace          = "myorg"
-db_password        = "ChangeMe123!"
-compliance_profile = "general"
-kubernetes_version = "1.29"
