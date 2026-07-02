@@ -1,0 +1,10 @@
+environment = "prod"
+namespace   = "myorg"
+db_password = "ChangeMe123!"
+
+# compliance_profile  = "general"
+# kubernetes_version  = "1.29"
+# node_instance_types = ["m5.xlarge"]
+# node_desired_size   = 3
+# db_engine           = "aurora-postgresql"
+# cache_node_type     = "cache.t3.medium"
