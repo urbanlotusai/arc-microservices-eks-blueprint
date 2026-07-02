@@ -2,14 +2,12 @@
 # 1. KMS — root of the encryption trust chain
 # ═══════════════════════════════════════════════════════════════════════════════
 module "kms" {
-  source  = "sourcefuse/arc-kms/aws"
-  version = "1.0.11"
+  source = "./modules/01-kms"
 
   alias                   = local.kms_alias
   policy                  = data.aws_iam_policy_document.kms.json
   description             = "CMK for ${local.name_prefix} microservices on EKS"
   deletion_window_in_days = var.kms_deletion_window
-  enable_key_rotation     = true
 
   tags = local.tags
 }
@@ -18,8 +16,7 @@ module "kms" {
 # 2. Network — VPC + subnets
 # ═══════════════════════════════════════════════════════════════════════════════
 module "network" {
-  source  = "sourcefuse/arc-network/aws"
-  version = "3.0.14"
+  source = "./modules/02-network"
 
   name        = local.name_prefix
   namespace   = var.namespace
@@ -33,8 +30,7 @@ module "network" {
 # 3. Security Group — cluster and service access control
 # ═══════════════════════════════════════════════════════════════════════════════
 module "security_group" {
-  source  = "sourcefuse/arc-security-group/aws"
-  version = "0.0.5"
+  source = "./modules/03-security-group"
 
   name        = "${local.name_prefix}-platform"
   description = "Security group for EKS nodes, Aurora, and ElastiCache"
@@ -75,8 +71,7 @@ module "security_group" {
 #    Outputs consumed by: module.eks_addons, kubernetes/helm providers
 # ═══════════════════════════════════════════════════════════════════════════════
 module "eks" {
-  source  = "sourcefuse/arc-eks/aws"
-  version = "6.0.4"
+  source = "./modules/04-eks"
 
   name        = local.cluster_name
   namespace   = var.namespace
@@ -114,8 +109,7 @@ module "eks" {
 # 5. EKS Addons — VPC CNI, CoreDNS, kube-proxy, EBS CSI
 # ═══════════════════════════════════════════════════════════════════════════════
 module "eks_addons" {
-  source  = "sourcefuse/arc-eks-addon/aws"
-  version = "1.0.3"
+  source = "./modules/05-eks-addon"
 
   cluster_name = module.eks.cluster_id
 
@@ -133,8 +127,7 @@ module "eks_addons" {
 # 6. ECR — container image registry
 # ═══════════════════════════════════════════════════════════════════════════════
 module "ecr" {
-  source  = "sourcefuse/arc-ecr/aws"
-  version = "0.0.4"
+  source = "./modules/06-ecr"
 
   name                 = local.ecr_repo_name
   image_tag_mutability = "IMMUTABLE"
@@ -161,17 +154,14 @@ module "ecr" {
 # 7. Aurora DB — persistent data store
 # ═══════════════════════════════════════════════════════════════════════════════
 module "db" {
-  source  = "sourcefuse/arc-db/aws"
-  version = "4.0.4"
+  source = "./modules/07-db"
 
   name        = local.db_name
   namespace   = var.namespace
   environment = var.environment
 
   engine         = var.db_engine
-  engine_type    = "cluster"
   engine_version = var.db_engine_version
-  license_model  = "general-public-license"
   port           = var.db_engine == "aurora-postgresql" ? 5432 : 3306
 
   username = var.db_username
@@ -181,7 +171,6 @@ module "db" {
     subnet_ids = data.aws_subnets.private.ids
   }
 
-  storage_encrypted       = true
   kms_key_id              = module.kms.key_arn
   instance_class          = var.db_instance_class
   backup_retention_period = local.is_strict ? 35 : 7
@@ -194,8 +183,7 @@ module "db" {
 # 8. ElastiCache Redis — session store and caching layer
 # ═══════════════════════════════════════════════════════════════════════════════
 module "cache" {
-  source  = "sourcefuse/arc-cache/aws"
-  version = "0.0.7"
+  source = "./modules/08-cache"
 
   name               = local.cache_name
   namespace          = var.namespace
@@ -207,10 +195,8 @@ module "cache" {
   node_type       = var.cache_node_type
   num_cache_nodes = 2
 
-  transit_encryption_enabled = true
-  at_rest_encryption_enabled = true
-  kms_key_id                 = module.kms.key_arn
-  automatic_failover_enabled = true
+  kms_key_id                  = module.kms.key_arn
+  automatic_failover_enabled  = true
 
   tags = local.tags
 }
@@ -219,8 +205,7 @@ module "cache" {
 # 9. SQS — inter-service task queue with DLQ
 # ═══════════════════════════════════════════════════════════════════════════════
 module "sqs" {
-  source  = "sourcefuse/arc-sqs/aws"
-  version = "0.0.3"
+  source = "./modules/09-sqs"
 
   name = local.sqs_queue_name
 
@@ -248,8 +233,7 @@ module "sqs" {
 # 10. WAF — ALB-scoped Web ACL (REGIONAL) for the Ingress load balancer
 # ═══════════════════════════════════════════════════════════════════════════════
 module "waf" {
-  source  = "sourcefuse/arc-waf/aws"
-  version = "1.0.6"
+  source = "./modules/10-waf"
 
   web_acl_name           = local.waf_name
   web_acl_default_action = "ALLOW"
@@ -289,8 +273,7 @@ module "waf" {
 #     annotate this ALB and route traffic to services by Ingress rules.
 # ═══════════════════════════════════════════════════════════════════════════════
 module "alb" {
-  source  = "sourcefuse/arc-load-balancer/aws"
-  version = "0.0.3"
+  source = "./modules/11-load-balancer"
 
   name       = "${local.name_prefix}-alb"
   vpc_id     = module.network.vpc_id

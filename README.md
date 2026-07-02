@@ -191,7 +191,21 @@ arc-microservices-eks-blueprint/
 ├── data.tf                   # caller identity, KMS policy, subnet lookups, EKS auth
 ├── outputs.tf                # cluster ID, ECR URL, Aurora/Redis endpoints, queue URLs
 ├── version.tf                # Terraform + AWS + kubernetes + helm provider pins
+├── .terraform-version        # tfenv pin (1.9.8)
 ├── terraform.tfvars.example  # copy to terraform.tfvars
+├── modules/                  # one numbered wrapper per ARC module
+│   ├── 01-kms/
+│   ├── 02-network/
+│   ├── 03-security-group/
+│   ├── 04-eks/
+│   ├── 05-eks-addon/
+│   ├── 06-ecr/
+│   ├── 07-db/
+│   ├── 08-cache/
+│   ├── 09-sqs/
+│   ├── 10-waf/
+│   └── 11-load-balancer/
+├── sample-app/                # multi-service Node app proving the EKS stack end-to-end
 ├── examples/
 │   ├── README.md
 │   ├── general.tfvars
