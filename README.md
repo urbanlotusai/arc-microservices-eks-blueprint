@@ -41,7 +41,7 @@ No hand-wiring of VPCs, IAM roles for service accounts, ALB ingress controllers,
 |---|---|
 | **Minutes, not days** | A complete, secured EKS microservices stack normally takes days of Terraform wiring — this deploys in one command. |
 | **Secure by default** | KMS CMK encrypts EKS secrets, Aurora, Redis, and SQS. ECR images scanned on push. WAF rate-limits ingress. |
-| **Compliance-ready** | Built-in `general` / `hipaa` profiles activate Aurora PITR, deletion protection, and tighter WAF rate limits. |
+| **Compliance-ready** | Built-in `general` / `hipaa` / `pci_dss` profiles activate Aurora PITR, deletion protection, and tighter WAF rate limits. |
 | **Proven building blocks** | Every resource comes from a published, versioned SourceFuse ARC module. Upgrades are a version bump. |
 | **GitOps-ready** | ArgoCD is deployed post-apply via Helm. Point it at your app repo and all future deployments are pull-based. |
 | **Portable & auditable** | Pure Terraform. Version-controlled, reproducible across environments and accounts. |
@@ -159,6 +159,7 @@ docker push $ECR_URL:latest
 |---|---|
 | `general` | KMS rotation on, 7-day Aurora PITR, WAF rate limit 5000 |
 | `hipaa` | Aurora PITR 35 days + deletion protection, WAF rate limit 2000 |
+| `pci_dss` | Aurora PITR 35 days + deletion protection, WAF rate limit 1000, SQS DLQ retries 1 |
 
 ---
 
@@ -194,7 +195,8 @@ arc-microservices-eks-blueprint/
 ├── examples/
 │   ├── README.md
 │   ├── general.tfvars
-│   └── hipaa.tfvars
+│   ├── hipaa.tfvars
+│   └── pci_dss.tfvars
 ├── docs/
 │   ├── INSTALL.md            # macOS · Linux · Windows setup guide
 │   └── DEPLOYMENT.md        # full deployment + ArgoCD setup + rollback

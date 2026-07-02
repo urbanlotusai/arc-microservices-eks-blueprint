@@ -16,6 +16,9 @@ locals {
     ComplianceProfile = var.compliance_profile
   }
 
-  is_strict          = var.compliance_profile == "hipaa"
+  is_hipaa           = var.compliance_profile == "hipaa"
+  is_pci_dss         = var.compliance_profile == "pci_dss"
+  is_strict          = local.is_hipaa || local.is_pci_dss
+  waf_rate_limit     = local.is_pci_dss ? 1000 : (local.is_hipaa ? 2000 : 5000)
   log_retention_days = local.is_strict ? 365 : 90
 }
